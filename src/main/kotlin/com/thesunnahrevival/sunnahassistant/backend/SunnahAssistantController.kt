@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.RestController
 class SunnahAssistantController(private val sunnahAssistantService: SunnahAssistantService) {
 
     @GetMapping("geocoding-data")
-    suspend fun getGeocodingData(address: String): GeocodingData {
-        return sunnahAssistantService.getGeocodingData(address)
+    suspend fun getGeocodingData(address: String, language: String = "en"): GeocodingData {
+        return sunnahAssistantService.getGeocodingData(address, language)
     }
 
 }

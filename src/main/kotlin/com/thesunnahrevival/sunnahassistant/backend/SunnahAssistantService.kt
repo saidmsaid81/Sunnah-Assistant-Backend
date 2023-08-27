@@ -26,13 +26,14 @@ class SunnahAssistantService {
     private lateinit var myEmail: String
 
 
-    suspend fun getGeocodingData(address: String): GeocodingData {
+    suspend fun getGeocodingData(address: String, language: String): GeocodingData {
         try {
             val successfulStatuses = listOf("OK", "ZERO_RESULTS")
 
             val geocodingApiResponse = KtorClient.get().get("https://maps.googleapis.com/maps/api/geocode/json") {
                 parameter("address", address)
                 parameter("key", geocodingApiKey)
+                parameter("language", language)
             }
 
             val geocodingData = geocodingApiResponse.body<GeocodingData>()
