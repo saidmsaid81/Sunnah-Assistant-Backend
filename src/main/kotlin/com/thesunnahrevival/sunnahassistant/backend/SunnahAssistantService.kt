@@ -7,10 +7,24 @@ import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.gson.*
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 @Service
 class SunnahAssistantService {
+
+    @Value("\${GEOCODING_API_KEY}")
+    private lateinit var geocodingApiKey: String
+
+    @Value("\${DOMAIN_NAME}")
+    private lateinit var domainName: String
+
+    @Value("\${SENDER_EMAIL}")
+    private lateinit var senderEmail: String
+
+    @Value("\${MY_EMAIL}")
+    private lateinit var myEmail: String
+
 
     suspend fun getGeocodingData(address: String): GeocodingData {
         try {
@@ -18,7 +32,7 @@ class SunnahAssistantService {
 
             val geocodingApiResponse = KtorClient.get().get("https://maps.googleapis.com/maps/api/geocode/json") {
                 parameter("address", address)
-                parameter("key", GEOCODING_API_KEY)
+                parameter("key", geocodingApiKey)
             }
 
             val geocodingData = geocodingApiResponse.body<GeocodingData>()
@@ -37,12 +51,12 @@ class SunnahAssistantService {
 
     suspend fun reportGeocodingServerError(status: String): GeocodingData {
 
-        KtorClient.get().post("https://api.mailgun.net/v3/$DOMAIN_NAME/messages") {
+        KtorClient.get().post("https://api.mailgun.net/v3/$domainName/messages") {
             parameter(
                 "from",
-                "Sunnah Assistant Backend <$SENDER_EMAIL>"
+                "Sunnah Assistant Backend <$senderEmail>"
             )
-            parameter("to", MY_EMAIL)
+            parameter("to", myEmail)
             parameter("subject", "Sunnah Assistant Api Failure")
             parameter("text", status)
         }
