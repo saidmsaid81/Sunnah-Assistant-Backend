@@ -51,17 +51,7 @@ class SunnahAssistantService {
     }
 
     suspend fun reportGeocodingServerError(status: String): GeocodingData {
-
-        KtorClient.get().post("https://api.mailgun.net/v3/$domainName/messages") {
-            parameter(
-                "from",
-                "Sunnah Assistant Backend <$senderEmail>"
-            )
-            parameter("to", myEmail)
-            parameter("subject", "Sunnah Assistant Api Failure")
-            parameter("text", status)
-        }
-
+        KtorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, status)
         return GeocodingData(ArrayList(),"AN_ERROR_OCCURRED")
     }
 
@@ -86,5 +76,17 @@ object KtorClient {
 
     fun get(): HttpClient {
         return client
+    }
+
+    suspend fun sendEmailToDeveloper(domainName: String, senderEmail: String, myEmail: String, message: String) {
+        client.post("https://api.mailgun.net/v3/$domainName/messages") {
+            parameter(
+                "from",
+                "Sunnah Assistant Backend <$senderEmail>"
+            )
+            parameter("to", myEmail)
+            parameter("subject", "Sunnah Assistant Api Failure")
+            parameter("text", message)
+        }
     }
 }

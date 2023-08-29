@@ -9,6 +9,11 @@ import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -16,12 +21,21 @@ import java.util.concurrent.TimeUnit
 @Component
 class RateLimitingFilter : Filter {
 
+    @Value("\${DOMAIN_NAME}")
+    private lateinit var domainName: String
+
+    @Value("\${SENDER_EMAIL}")
+    private lateinit var senderEmail: String
+
+    @Value("\${MY_EMAIL}")
+    private lateinit var myEmail: String
+
     private val buckets = Caffeine.newBuilder()
         .expireAfterAccess(1, TimeUnit.HOURS) // expire after 1 hour of inactivity
         .build<String, Bucket> { createBucket() }
 
     private fun createBucket(): Bucket {
-        val limit = Bandwidth.classic(1, Refill.greedy(10, Duration.ofHours(1)))
+        val limit = Bandwidth.classic(15, Refill.greedy(15, Duration.ofHours(1)))
         return Bucket.builder()
             .addLimit(limit)
             .build()
@@ -38,6 +52,11 @@ class RateLimitingFilter : Filter {
             val httpResponse = response as HttpServletResponse
             httpResponse.status = HttpStatusCode.TooManyRequests.value
             httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
+
+            //For analytics and diagnostic purposes
+            CoroutineScope(Dispatchers.IO).launch {
+                KtorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests")
+            }
         }
     }
 }
