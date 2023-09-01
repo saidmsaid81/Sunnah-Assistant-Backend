@@ -1,17 +1,12 @@
 package com.thesunnahrevival.sunnahassistant.backend
 
-import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.plugins.auth.*
-import io.ktor.client.plugins.auth.providers.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
-import io.ktor.serialization.gson.*
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 @Service
-class SunnahAssistantService {
+class SunnahAssistantService(private val ktorClient: KtorClient) {
 
     @Value("\${GEOCODING_API_KEY}")
     private lateinit var geocodingApiKey: String
@@ -30,7 +25,7 @@ class SunnahAssistantService {
         try {
             val successfulStatuses = listOf("OK", "ZERO_RESULTS")
 
-            val geocodingApiResponse = KtorClient.get().get("https://maps.googleapis.com/maps/api/geocode/json") {
+            val geocodingApiResponse = ktorClient.getKtorClient().get("https://maps.googleapis.com/maps/api/geocode/json") {
                 parameter("address", address)
                 parameter("key", geocodingApiKey)
                 parameter("language", language)
@@ -51,42 +46,8 @@ class SunnahAssistantService {
     }
 
     suspend fun reportGeocodingServerError(status: String): GeocodingData {
-        KtorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, status)
+        ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, status)
         return GeocodingData(ArrayList(),"AN_ERROR_OCCURRED")
     }
 
-}
-
-object KtorClient {
-
-    private val client by lazy {
-        HttpClient {
-            install(Auth) {
-                basic {
-                    credentials {
-                        BasicAuthCredentials(username = "api", password = MAILGUN_API_KEY)
-                    }
-                }
-            }
-            install(ContentNegotiation) {
-                gson()
-            }
-        }
-    }
-
-    fun get(): HttpClient {
-        return client
-    }
-
-    suspend fun sendEmailToDeveloper(domainName: String, senderEmail: String, myEmail: String, message: String) {
-        client.post("https://api.mailgun.net/v3/$domainName/messages") {
-            parameter(
-                "from",
-                "Sunnah Assistant Backend <$senderEmail>"
-            )
-            parameter("to", myEmail)
-            parameter("subject", "Sunnah Assistant Api Failure")
-            parameter("text", message)
-        }
-    }
 }

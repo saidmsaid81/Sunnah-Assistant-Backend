@@ -1,7 +1,9 @@
 package com.thesunnahrevival.sunnahassistant.backend
 
 import com.github.benmanes.caffeine.cache.Caffeine
-import io.github.bucket4j.*
+import io.github.bucket4j.Bandwidth
+import io.github.bucket4j.Bucket
+import io.github.bucket4j.Refill
 import io.ktor.http.*
 import jakarta.servlet.Filter
 import jakarta.servlet.FilterChain
@@ -11,7 +13,6 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -19,7 +20,7 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 @Component
-class RateLimitingFilter : Filter {
+class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
 
     @Value("\${DOMAIN_NAME}")
     private lateinit var domainName: String
@@ -53,9 +54,9 @@ class RateLimitingFilter : Filter {
             httpResponse.status = HttpStatusCode.TooManyRequests.value
             httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
 
-            //For analytics and diagnostic purposes
+            //For analytics purposes
             CoroutineScope(Dispatchers.IO).launch {
-                KtorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests")
+                ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests")
             }
         }
     }
