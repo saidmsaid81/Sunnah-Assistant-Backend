@@ -54,9 +54,9 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
             httpResponse.status = HttpStatusCode.TooManyRequests.value
             httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
 
-            //For analytics purposes
+            //For analytics purposes and preventing abuse
             CoroutineScope(Dispatchers.IO).launch {
-                ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests")
+                ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests: $ip")
             }
         }
     }
