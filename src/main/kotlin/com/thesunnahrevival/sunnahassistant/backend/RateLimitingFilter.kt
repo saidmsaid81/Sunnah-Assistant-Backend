@@ -21,9 +21,11 @@ import java.util.concurrent.TimeUnit
 
 private const val userAgentHeader = "User-Agent"
 
-private const val appVersionHeader = "app-version"
+private const val appVersionHeader = "App-Version"
 
 private const val currentAppVersion = 15
+
+private const val expectedUserAgent = "SunnahAssistant-Android-App"
 
 @Component
 class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
@@ -49,36 +51,40 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
     }
 
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
-        val httpRequest = request as HttpServletRequest
-        val httpResponse = response as HttpServletResponse
+        try {
+            val httpRequest = request as HttpServletRequest
+            val httpResponse = response as HttpServletResponse
 
-        val userAgentHeader = httpRequest.getHeader(userAgentHeader)
-        val appVersionHeader = httpRequest.getHeader(appVersionHeader)
+            val userAgentHeader = httpRequest.getHeader(userAgentHeader)
+            val appVersionHeader = httpRequest.getHeader(appVersionHeader)
 
-        when {
-            userAgentHeader == null || !userAgentHeader.matches("SunnahAssistant-Android-App".toRegex()) -> {
-                response.status = HttpStatusCode.Unauthorized.value
-                notifyDeveloper("Invalid User Agent: $userAgentHeader")
-            }
-            appVersionHeader == null -> {
-                response.status = HttpStatusCode.Unauthorized.value
-                notifyDeveloper("Invalid App Version")
-            }
-            appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
-                response.status = HttpStatusCode.UpgradeRequired.value
-            }
-            else -> {
-                val ip = httpRequest.remoteAddr
-                val bucket = buckets.get(ip)
-                val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
-                if (consumptionProbe.isConsumed) {
-                    chain.doFilter(request, response)
-                } else {
-                    httpResponse.status = HttpStatusCode.TooManyRequests.value
-                    httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
-                    notifyDeveloper("Too many requests: $ip")
+            when {
+                userAgentHeader == null || !userAgentHeader.matches(expectedUserAgent.toRegex()) -> {
+                    response.status = HttpStatusCode.Unauthorized.value
+                    notifyDeveloper("Invalid User Agent: $userAgentHeader")
+                }
+                appVersionHeader == null -> {
+                    response.status = HttpStatusCode.Unauthorized.value
+                    notifyDeveloper("Invalid App Version")
+                }
+                appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
+                    response.status = HttpStatusCode.UpgradeRequired.value
+                }
+                else -> {
+                    val ip = httpRequest.remoteAddr
+                    val bucket = buckets.get(ip)
+                    val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
+                    if (consumptionProbe.isConsumed) {
+                        chain.doFilter(request, response)
+                    } else {
+                        httpResponse.status = HttpStatusCode.TooManyRequests.value
+                        httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
+                        notifyDeveloper("Too many requests: $ip")
+                    }
                 }
             }
+        } catch (exception: Exception) {
+            notifyDeveloper("Your server has experienced an exception.\n ${exception.message}")
         }
     }
 
