@@ -19,6 +19,12 @@ import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
+private const val userAgentHeader = "User-Agent"
+
+private const val appVersionHeader = "app-version"
+
+private const val currentAppVersion = 15
+
 @Component
 class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
 
@@ -44,20 +50,41 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
 
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
         val httpRequest = request as HttpServletRequest
+        val httpResponse = response as HttpServletResponse
+
+        val userAgentHeader = httpRequest.getHeader(userAgentHeader)
+        val appVersionHeader = httpRequest.getHeader(appVersionHeader).toIntOrNull()
+
+        when {
+            !userAgentHeader.matches("SunnahAssistant-Android-App".toRegex()) -> {
+                response.status = HttpStatusCode.Unauthorized.value
+                notifyDeveloper("Invalid User Agent: $userAgentHeader")
+            }
+            appVersionHeader == null -> {
+                response.status = HttpStatusCode.Unauthorized.value
+                notifyDeveloper("Invalid App Version: $appVersionHeader")
+            }
+            appVersionHeader < currentAppVersion -> {
+                response.status = HttpStatusCode.UpgradeRequired.value
+            }
+        }
+
         val ip = httpRequest.remoteAddr
         val bucket = buckets.get(ip)
         val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
         if (consumptionProbe.isConsumed) {
             chain.doFilter(request, response)
         } else {
-            val httpResponse = response as HttpServletResponse
             httpResponse.status = HttpStatusCode.TooManyRequests.value
             httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
+            notifyDeveloper("Too many requests: $ip")
+        }
+    }
 
-            //For analytics purposes and preventing abuse
-            CoroutineScope(Dispatchers.IO).launch {
-                ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, "Too many requests: $ip")
-            }
+    private fun notifyDeveloper(message: String) {
+        //For analytics purposes and preventing abuse
+        CoroutineScope(Dispatchers.IO).launch {
+            ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, message)
         }
     }
 }

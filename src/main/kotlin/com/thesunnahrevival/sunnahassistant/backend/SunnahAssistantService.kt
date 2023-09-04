@@ -45,7 +45,7 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
 
     }
 
-    suspend fun reportGeocodingServerError(status: String): GeocodingData {
+    private suspend fun reportGeocodingServerError(status: String): GeocodingData {
         ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, status)
         return GeocodingData(ArrayList(),"AN_ERROR_OCCURRED")
     }
