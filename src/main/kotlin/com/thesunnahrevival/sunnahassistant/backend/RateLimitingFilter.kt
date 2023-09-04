@@ -53,31 +53,32 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
         val httpResponse = response as HttpServletResponse
 
         val userAgentHeader = httpRequest.getHeader(userAgentHeader)
-        val appVersionHeader = httpRequest.getHeader(appVersionHeader).toIntOrNull()
+        val appVersionHeader = httpRequest.getHeader(appVersionHeader)
 
         when {
-            !userAgentHeader.matches("SunnahAssistant-Android-App".toRegex()) -> {
+            userAgentHeader == null || !userAgentHeader.matches("SunnahAssistant-Android-App".toRegex()) -> {
                 response.status = HttpStatusCode.Unauthorized.value
                 notifyDeveloper("Invalid User Agent: $userAgentHeader")
             }
             appVersionHeader == null -> {
                 response.status = HttpStatusCode.Unauthorized.value
-                notifyDeveloper("Invalid App Version: $appVersionHeader")
+                notifyDeveloper("Invalid App Version")
             }
-            appVersionHeader < currentAppVersion -> {
+            appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
                 response.status = HttpStatusCode.UpgradeRequired.value
             }
-        }
-
-        val ip = httpRequest.remoteAddr
-        val bucket = buckets.get(ip)
-        val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
-        if (consumptionProbe.isConsumed) {
-            chain.doFilter(request, response)
-        } else {
-            httpResponse.status = HttpStatusCode.TooManyRequests.value
-            httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
-            notifyDeveloper("Too many requests: $ip")
+            else -> {
+                val ip = httpRequest.remoteAddr
+                val bucket = buckets.get(ip)
+                val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
+                if (consumptionProbe.isConsumed) {
+                    chain.doFilter(request, response)
+                } else {
+                    httpResponse.status = HttpStatusCode.TooManyRequests.value
+                    httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
+                    notifyDeveloper("Too many requests: $ip")
+                }
+            }
         }
     }
 
