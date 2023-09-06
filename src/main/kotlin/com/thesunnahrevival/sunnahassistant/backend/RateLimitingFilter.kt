@@ -54,6 +54,7 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
         try {
             val httpRequest = request as HttpServletRequest
             val httpResponse = response as HttpServletResponse
+            val ipAddress = httpRequest.remoteAddr
 
             val userAgentHeader = httpRequest.getHeader(userAgentHeader)
             val appVersionHeader = httpRequest.getHeader(appVersionHeader)
@@ -61,37 +62,37 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
             when {
                 userAgentHeader == null || !userAgentHeader.matches(expectedUserAgent.toRegex()) -> {
                     response.status = HttpStatusCode.Unauthorized.value
-                    notifyDeveloper("Invalid User Agent: $userAgentHeader")
+                    notifyDeveloper("Invalid User Agent: $userAgentHeader", ipAddress)
                 }
                 appVersionHeader == null -> {
                     response.status = HttpStatusCode.Unauthorized.value
-                    notifyDeveloper("Invalid App Version")
+                    notifyDeveloper("Invalid App Version", ipAddress)
                 }
                 appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
                     response.status = HttpStatusCode.UpgradeRequired.value
                 }
                 else -> {
-                    val ip = httpRequest.remoteAddr
-                    val bucket = buckets.get(ip)
+                    val bucket = buckets.get(ipAddress)
                     val consumptionProbe = bucket.tryConsumeAndReturnRemaining(1)
                     if (consumptionProbe.isConsumed) {
                         chain.doFilter(request, response)
                     } else {
                         httpResponse.status = HttpStatusCode.TooManyRequests.value
                         httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
-                        notifyDeveloper("Too many requests: $ip")
+                        notifyDeveloper("Too many requests", ipAddress)
                     }
                 }
             }
         } catch (exception: Exception) {
-            notifyDeveloper("Your server has experienced an exception.\n ${exception.message}")
+            notifyDeveloper("Your server has experienced an exception.\n ${exception.message}", "")
         }
     }
 
-    private fun notifyDeveloper(message: String) {
+    private fun notifyDeveloper(message: String, ipAddress: String) {
         //For analytics purposes and preventing abuse
+        val messageWithIp = "$message\nIP Address: $ipAddress"
         CoroutineScope(Dispatchers.IO).launch {
-            ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, message)
+            ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, messageWithIp)
         }
     }
 }
