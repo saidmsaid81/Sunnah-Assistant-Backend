@@ -62,11 +62,9 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
             when {
                 userAgentHeader == null || !userAgentHeader.matches(expectedUserAgent.toRegex()) -> {
                     response.status = HttpStatusCode.Unauthorized.value
-                    notifyDeveloper("Invalid User Agent: $userAgentHeader", ipAddress)
                 }
                 appVersionHeader == null -> {
                     response.status = HttpStatusCode.Unauthorized.value
-                    notifyDeveloper("Invalid App Version", ipAddress)
                 }
                 appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
                     response.status = HttpStatusCode.UpgradeRequired.value
