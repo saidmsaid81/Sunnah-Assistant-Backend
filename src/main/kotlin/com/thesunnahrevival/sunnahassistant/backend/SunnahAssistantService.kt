@@ -69,16 +69,19 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
             parameter("limit", 1)
         }
 
-        val openWeatherGeocodingData = geocodingApiResponse.body<OpenWeatherDto>()
+        val openWeatherGeocodingData = geocodingApiResponse.body<List<OpenWeatherDto>>()
 
         return if (geocodingApiResponse.status.isSuccess()) {
-            convertToGeocodingData(openWeatherGeocodingData, language)
+            convertToGeocodingData(openWeatherGeocodingData.firstOrNull(), language)
         } else {
             reportGeocodingServerError("OpenWeather Api ${geocodingApiResponse.status}")
         }
     }
 
-    private fun convertToGeocodingData(data: OpenWeatherDto, language: String): GeocodingData {
+    private fun convertToGeocodingData(data: OpenWeatherDto?, language: String): GeocodingData {
+        if (data == null) {
+            return GeocodingData(emptyList(), "ZERO_RESULTS")
+        }
         val name = data.localNames?.getOrDefault(language, data.name)
         val formattedAddress = listOfNotNull(name, data.state, data.country).joinToString(", ")
 

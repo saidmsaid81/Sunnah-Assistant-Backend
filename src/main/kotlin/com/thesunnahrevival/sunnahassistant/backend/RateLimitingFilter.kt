@@ -23,10 +23,6 @@ private const val userAgentHeader = "User-Agent"
 
 private const val appVersionHeader = "App-Version"
 
-private const val currentAppVersion = 15
-
-private const val expectedUserAgent = "SunnahAssistant-Android-App"
-
 @Component
 class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
 
@@ -38,6 +34,13 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
 
     @Value("\${MY_EMAIL}")
     private lateinit var myEmail: String
+
+    @Value("\${EXPECTED_USER_AGENT}")
+    private lateinit var expectedUserAgent: String
+
+    @Value("\${CURRENT_APP_VERSION}")
+    private lateinit var currentAppVersion: String
+
 
     private val buckets = Caffeine.newBuilder()
         .expireAfterAccess(1, TimeUnit.HOURS) // expire after 1 hour of inactivity
@@ -66,7 +69,7 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
                 appVersionHeader == null -> {
                     response.status = HttpStatusCode.Unauthorized.value
                 }
-                appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion -> {
+                appVersionHeader.toIntOrNull() != null && appVersionHeader.toIntOrNull()!! < currentAppVersion.toInt() -> {
                     response.status = HttpStatusCode.UpgradeRequired.value
                 }
                 else -> {
