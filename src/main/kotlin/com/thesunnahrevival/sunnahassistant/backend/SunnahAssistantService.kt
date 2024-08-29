@@ -27,12 +27,11 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
 
 
     suspend fun getGeocodingData(address: String, language: String): GeocodingData {
-        try {
-//            return getGoogleGeocodingData(address, language)
-            return getOpenWeatherGeocodingData(address, language)
+        return try {
+            getGoogleGeocodingData(address, language)
 
         } catch (exception: Exception) {
-            return reportGeocodingServerError("Your server has experienced an exception.\n ${exception.message}")
+            reportGeocodingServerError("Your server has experienced an exception.\n ${exception.message}")
         }
 
     }
@@ -55,6 +54,7 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
             geocodingData
         } else {
             reportGeocodingServerError("Google Geocoding Api ${geocodingData.status}")
+            getOpenWeatherGeocodingData(address, language)
         }
     }
 
