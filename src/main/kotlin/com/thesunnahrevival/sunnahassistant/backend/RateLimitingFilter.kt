@@ -57,9 +57,10 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
         try {
             val httpRequest = request as HttpServletRequest
             val httpResponse = response as HttpServletResponse
-            
-            // Exclude actuator endpoints from rate limiting and authentication
-            if (httpRequest.requestURI.startsWith("/actuator")) {
+
+            println("Request received from ${httpRequest.requestURI}")
+            // Exclude non-geocoding-date endpoints from rate limiting and authentication
+            if (!httpRequest.requestURI.contains("geocoding-data")) {
                 chain.doFilter(request, response)
                 return
             }
