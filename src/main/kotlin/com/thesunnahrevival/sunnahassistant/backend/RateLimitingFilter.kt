@@ -11,9 +11,6 @@ import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.Duration
@@ -24,23 +21,15 @@ private const val userAgentHeader = "User-Agent"
 private const val appVersionHeader = "App-Version"
 
 @Component
-class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
-
-    @Value("\${DOMAIN_NAME}")
-    private lateinit var domainName: String
-
-    @Value("\${SENDER_EMAIL}")
-    private lateinit var senderEmail: String
-
-    @Value("\${MY_EMAIL}")
-    private lateinit var myEmail: String
+class RateLimitingFilter(
+    private val asyncEmailService: AsyncEmailService
+) : Filter {
 
     @Value("\${EXPECTED_USER_AGENT}")
     private lateinit var expectedUserAgent: String
 
     @Value("\${CURRENT_APP_VERSION}")
     private lateinit var currentAppVersion: String
-
 
     private val buckets = Caffeine.newBuilder()
         .expireAfterAccess(1, TimeUnit.HOURS) // expire after 1 hour of inactivity
@@ -57,7 +46,7 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
         try {
             val httpRequest = request as HttpServletRequest
             val httpResponse = response as HttpServletResponse
-            
+
             // Exclude actuator endpoints from rate limiting and authentication
             if (httpRequest.requestURI.startsWith("/actuator")) {
                 chain.doFilter(request, response)
@@ -86,20 +75,14 @@ class RateLimitingFilter(private val ktorClient: KtorClient) : Filter {
                     } else {
                         httpResponse.status = HttpStatusCode.TooManyRequests.value
                         httpResponse.addHeader("Retry-After", consumptionProbe.nanosToWaitForRefill.div(1_000_000_000.0).toString())
-                        notifyDeveloper("Too many requests", ipAddress)
+                        asyncEmailService.sendEmailToDeveloper("Too many requests $ipAddress") // For analytics purposes and preventing abuse
+
                     }
                 }
             }
         } catch (exception: Exception) {
-            notifyDeveloper("Your server has experienced an exception.\n ${exception.message}", "")
+            asyncEmailService.sendEmailToDeveloper("Your server has experienced an exception.\n ${exception.message}")
         }
     }
 
-    private fun notifyDeveloper(message: String, ipAddress: String) {
-        //For analytics purposes and preventing abuse
-        val messageWithIp = "$message\nIP Address: $ipAddress"
-        CoroutineScope(Dispatchers.IO).launch {
-            ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, messageWithIp)
-        }
-    }
 }

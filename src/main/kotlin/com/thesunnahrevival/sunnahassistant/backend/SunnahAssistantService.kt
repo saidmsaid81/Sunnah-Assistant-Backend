@@ -8,7 +8,10 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 
 @Service
-class SunnahAssistantService(private val ktorClient: KtorClient) {
+class SunnahAssistantService(
+    private val ktorClient: KtorClient,
+    private val asyncEmailService: AsyncEmailService
+) {
 
     @Value("\${GEOCODING_API_KEY}")
     private lateinit var geocodingApiKey: String
@@ -16,24 +19,31 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
     @Value("\${OPENWEATHER_API_KEY}")
     private lateinit var openWeatherGeocodingKey: String
 
-    @Value("\${DOMAIN_NAME}")
-    private lateinit var domainName: String
-
-    @Value("\${SENDER_EMAIL}")
-    private lateinit var senderEmail: String
-
-    @Value("\${MY_EMAIL}")
-    private lateinit var myEmail: String
-
+    @Value("\${FILTER_STRING}")
+    private lateinit var filterString: String
+    
+    private val filters: Set<String>
+        get() = filterString.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     suspend fun getGeocodingData(address: String, language: String): GeocodingData {
         return try {
-            getGoogleGeocodingData(address, language)
-
+            val geocodingData = getGoogleGeocodingData(address, language)
+            
+            geocodingData.copy(
+                results = geocodingData.results.map { result ->
+                    val lastPart = result.formattedAddress.substringAfterLast(", ")
+                    result.copy(
+                        formattedAddress = if (filters.any { it.equals(lastPart, ignoreCase = true) }) {
+                            result.formattedAddress.substringBeforeLast(",")
+                        } else {
+                            result.formattedAddress
+                        }
+                    )
+                }
+            )
         } catch (exception: Exception) {
             reportGeocodingServerError("Your server has experienced an exception.\n ${exception.message}")
         }
-
     }
 
     private suspend fun SunnahAssistantService.getGoogleGeocodingData(
@@ -93,7 +103,7 @@ class SunnahAssistantService(private val ktorClient: KtorClient) {
 
 
     private suspend fun reportGeocodingServerError(status: String): GeocodingData {
-        ktorClient.sendEmailToDeveloper(domainName, senderEmail, myEmail, status)
+        asyncEmailService.sendEmailToDeveloper(status)
         return GeocodingData(ArrayList(),"AN_ERROR_OCCURRED")
     }
 
